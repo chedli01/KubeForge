@@ -1,17 +1,21 @@
-# First milestone: one custom request -> Namespace + ResourceQuota.
+# KubeForge environment provisioning:
+# One DevEnvironment XR -> Namespace + ResourceQuota + LimitRange.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
   name: kubeforge-devenvironment
+
 spec:
   compositeTypeRef:
     apiVersion: platform.kubeforge.io/v1alpha1
     kind: DevEnvironment
+
   mode: Pipeline
   pipeline:
     - step: build-environment
       functionRef:
         name: function-go-templating
+
       input:
         apiVersion: gotemplating.fn.crossplane.io/v1beta1
         kind: GoTemplate
@@ -22,7 +26,9 @@ spec:
             {{- $name := $xr.metadata.name }}
             {{- $team := $xr.spec.team }}
             {{- $size := $xr.spec.size }}
+
             ---
+            # 1. Namespace
             apiVersion: v1
             kind: Namespace
             metadata:
@@ -35,7 +41,9 @@ spec:
               labels:
                 platform.kubeforge.io/environment: {{ $name }}
                 platform.kubeforge.io/team: {{ $team }}
+
             ---
+            # 2. Namespace-wide ResourceQuota
             apiVersion: v1
             kind: ResourceQuota
             metadata:
@@ -59,3 +67,50 @@ spec:
                 {{- else }}
                 {{- fail "unsupported DevEnvironment size" }}
                 {{- end }}
+
+            ---
+            # 3. Per-container LimitRange
+            apiVersion: v1
+            kind: LimitRange
+            metadata:
+              name: environment-limits
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-limits
+                {{- if hasKey $.observed.resources "environment-limits" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            spec:
+              limits:
+                - type: Container
+                  {{- if eq $size "small" }}
+                  defaultRequest:
+                    cpu: 100m
+                    memory: 128Mi
+                  default:
+                    cpu: 500m
+                    memory: 512Mi
+                  min:
+                    cpu: 50m
+                    memory: 64Mi
+                  max:
+                    cpu: "1"
+                    memory: 1Gi
+                  {{- else if eq $size "medium" }}
+                  defaultRequest:
+                    cpu: 250m
+                    memory: 256Mi
+                  default:
+                    cpu: "1"
+                    memory: 1Gi
+                  min:
+                    cpu: 100m
+                    memory: 128Mi
+                  max:
+                    cpu: "2"
+                    memory: 2Gi
+                  {{- else }}
+                  {{- fail "unsupported DevEnvironment size" }}
+                  {{- end }}
