@@ -1,7 +1,7 @@
-apiVersion: platform.kubeforge.io/v1alpha1
-kind: DevEnvironment
-metadata:
-  name: gitops-demo
-spec:
-  team: demo
-  size: medium
+# apiVersion: platform.kubeforge.io/v1alpha1
+# kind: DevEnvironment
+# metadata:
+#   name: gitops-demo
+# spec:
+#   team: demo
+#   size: medium
