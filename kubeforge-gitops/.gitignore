@@ -1,0 +1,4 @@
+# User-specific repository configuration (do not commit tokens or credentials).
+config/gitops.env
+.generated/
+*.log
