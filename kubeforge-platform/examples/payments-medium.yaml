@@ -1,0 +1,8 @@
+# Optional later smoke test: apply this to resize the same environment.
+apiVersion: platform.kubeforge.io/v1alpha1
+kind: DevEnvironment
+metadata:
+  name: payments-dev
+spec:
+  team: payments
+  size: medium

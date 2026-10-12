@@ -1,0 +1,43 @@
+# XRD: Registers a cluster-scoped Kubernetes API for our DevEnvironment requests.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: devenvironments.platform.kubeforge.io
+spec:
+  scope: Cluster
+  group: platform.kubeforge.io
+  names:
+    kind: DevEnvironment
+    plural: devenvironments
+    singular: devenvironment
+  defaultCompositionRef:
+    name: kubeforge-devenvironment
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: High-level request for an isolated workspace.
+              properties:
+                team:
+                  type: string
+                  description: Team identifier, for naming and labels.
+                  pattern: '^[a-z]([-a-z0-9]*[a-z0-9])?$'
+                  minLength: 1
+                  maxLength: 40
+                size:
+                  type: string
+                  description: Namespace resource request budget.
+                  enum:
+                    - small
+                    - medium
+              required:
+                - team
+                - size
+          required:
+            - spec

@@ -1,0 +1,12 @@
+# Grant the Crossplane control plane only the native resource permissions
+# needed for our first Composition (not cluster-admin).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeforge-crossplane-native-composition
+  labels:
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "resourcequotas"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

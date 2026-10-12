@@ -1,0 +1,8 @@
+# Cluster-scoped: intentionally no metadata.namespace.
+apiVersion: platform.kubeforge.io/v1alpha1
+kind: DevEnvironment
+metadata:
+  name: payments-dev
+spec:
+  team: payments
+  size: small

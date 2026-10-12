@@ -1,0 +1,61 @@
+# First milestone: one custom request -> Namespace + ResourceQuota.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: kubeforge-devenvironment
+spec:
+  compositeTypeRef:
+    apiVersion: platform.kubeforge.io/v1alpha1
+    kind: DevEnvironment
+  mode: Pipeline
+  pipeline:
+    - step: build-environment
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $name := $xr.metadata.name }}
+            {{- $team := $xr.spec.team }}
+            {{- $size := $xr.spec.size }}
+            ---
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-namespace
+                {{- if hasKey $.observed.resources "environment-namespace" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+                platform.kubeforge.io/team: {{ $team }}
+            ---
+            apiVersion: v1
+            kind: ResourceQuota
+            metadata:
+              name: environment-quota
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-quota
+                {{- if hasKey $.observed.resources "environment-quota" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            spec:
+              hard:
+                {{- if eq $size "small" }}
+                requests.cpu: "2"
+                requests.memory: 4Gi
+                {{- else if eq $size "medium" }}
+                requests.cpu: "4"
+                requests.memory: 8Gi
+                {{- else }}
+                {{- fail "unsupported DevEnvironment size" }}
+                {{- end }}
