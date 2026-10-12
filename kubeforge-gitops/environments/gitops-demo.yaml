@@ -4,4 +4,4 @@ metadata:
   name: gitops-demo
 spec:
   team: demo
-  size: small
+  size: medium
