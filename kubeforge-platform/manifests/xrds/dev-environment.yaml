@@ -36,6 +36,13 @@ spec:
                   enum:
                     - small
                     - medium
+                networkProfile:
+                  type: string
+                  description: Platform-managed network connectivity profile.
+                  enum:
+                    - isolated
+                    - standard
+                  default: isolated
               required:
                 - team
                 - size

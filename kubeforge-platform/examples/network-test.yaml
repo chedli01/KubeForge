@@ -1,0 +1,8 @@
+apiVersion: platform.kubeforge.io/v1alpha1
+kind: DevEnvironment
+metadata:
+  name: network-test
+spec:
+  team: test
+  size: small
+  networkProfile: standard

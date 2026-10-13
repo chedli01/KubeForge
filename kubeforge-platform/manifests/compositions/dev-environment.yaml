@@ -2,24 +2,21 @@
 # One DevEnvironment XR ->
 # Namespace + ResourceQuota + LimitRange
 # + Viewer Role + Deployer Role
-# + Deployer ServiceAccount + RoleBinding.
-
+# + Deployer ServiceAccount + RoleBinding
+# + NetworkPolicy.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
   name: kubeforge-devenvironment
-
 spec:
   compositeTypeRef:
     apiVersion: platform.kubeforge.io/v1alpha1
     kind: DevEnvironment
-
   mode: Pipeline
   pipeline:
     - step: build-environment
       functionRef:
         name: function-go-templating
-
       input:
         apiVersion: gotemplating.fn.crossplane.io/v1beta1
         kind: GoTemplate
@@ -30,7 +27,7 @@ spec:
             {{- $name := $xr.metadata.name }}
             {{- $team := $xr.spec.team }}
             {{- $size := $xr.spec.size }}
-
+            {{- $profile := default "isolated" $xr.spec.networkProfile }}
             ---
             # 1. Namespace
             apiVersion: v1
@@ -45,7 +42,6 @@ spec:
               labels:
                 platform.kubeforge.io/environment: {{ $name }}
                 platform.kubeforge.io/team: {{ $team }}
-
             ---
             # 2. Namespace-wide ResourceQuota
             apiVersion: v1
@@ -71,7 +67,6 @@ spec:
                 {{- else }}
                 {{- fail "unsupported DevEnvironment size" }}
                 {{- end }}
-
             ---
             # 3. Per-container LimitRange
             apiVersion: v1
@@ -118,7 +113,6 @@ spec:
                   {{- else }}
                   {{- fail "unsupported DevEnvironment size" }}
                   {{- end }}
-
             ---
             # 4. Viewer Role
             # Read-only permissions for application workloads.
@@ -143,13 +137,11 @@ spec:
                   - get
                   - list
                   - watch
-
               - apiGroups: [""]
                 resources:
                   - pods/log
                 verbs:
                   - get
-
               - apiGroups: ["apps"]
                 resources:
                   - deployments
@@ -160,7 +152,6 @@ spec:
                   - get
                   - list
                   - watch
-
               - apiGroups: ["batch"]
                 resources:
                   - jobs
@@ -169,7 +160,6 @@ spec:
                   - get
                   - list
                   - watch
-
             ---
             # 5. Deployer Role
             # Manage application workloads but not RBAC,
@@ -197,14 +187,12 @@ spec:
                   - get
                   - list
                   - watch
-
               # Access container logs.
               - apiGroups: [""]
                 resources:
                   - pods/log
                 verbs:
                   - get
-
               # Create and manage application Pods,
               # Services and ConfigMaps.
               - apiGroups: [""]
@@ -217,7 +205,6 @@ spec:
                   - update
                   - patch
                   - delete
-
               # Read application controllers.
               - apiGroups: ["apps"]
                 resources:
@@ -229,7 +216,6 @@ spec:
                   - get
                   - list
                   - watch
-
               # Deploy and manage application controllers.
               - apiGroups: ["apps"]
                 resources:
@@ -241,7 +227,6 @@ spec:
                   - update
                   - patch
                   - delete
-
               # Read and manage batch workloads.
               - apiGroups: ["batch"]
                 resources:
@@ -255,7 +240,6 @@ spec:
                   - update
                   - patch
                   - delete
-
             ---
             # 6. ServiceAccount for deployment automation
             apiVersion: v1
@@ -271,7 +255,6 @@ spec:
               labels:
                 platform.kubeforge.io/environment: {{ $name }}
             automountServiceAccountToken: false
-
             ---
             # 7. Bind the deployer Role to its ServiceAccount
             apiVersion: rbac.authorization.k8s.io/v1
@@ -294,3 +277,71 @@ spec:
               apiGroup: rbac.authorization.k8s.io
               kind: Role
               name: environment-deployer
+            ---
+            # 8. Environment NetworkPolicy
+            # Both profiles: same-namespace traffic + Kubernetes DNS.
+            # Standard also permits HTTPS to public IPv4 destinations.
+            apiVersion: networking.k8s.io/v1
+            kind: NetworkPolicy
+            metadata:
+              name: environment-network-policy
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-network-policy
+                {{- if hasKey $.observed.resources "environment-network-policy" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            spec:
+              podSelector: {}
+              policyTypes:
+                - Ingress
+                - Egress
+              ingress:
+                # Allow incoming connections only from Pods in this Namespace.
+                - from:
+                    - podSelector: {}
+              egress:
+                # Allow connections to Pods in this Namespace.
+                - to:
+                    - podSelector: {}
+                # Allow DNS queries to CoreDNS in kube-system.
+                - to:
+                    - namespaceSelector:
+                        matchLabels:
+                          kubernetes.io/metadata.name: kube-system
+                      podSelector:
+                        matchLabels:
+                          k8s-app: kube-dns
+                  ports:
+                    - protocol: UDP
+                      port: 53
+                    - protocol: TCP
+                      port: 53
+                {{- if eq $profile "standard" }}
+                # Allow public HTTPS; exclude private/internal IPv4 ranges.
+                - to:
+                    - ipBlock:
+                        cidr: 0.0.0.0/0
+                        except:
+                          - 0.0.0.0/8
+                          - 10.0.0.0/8
+                          - 100.64.0.0/10
+                          - 127.0.0.0/8
+                          - 169.254.0.0/16
+                          - 172.16.0.0/12
+                          - 192.0.0.0/24
+                          - 192.0.2.0/24
+                          - 192.168.0.0/16
+                          - 198.18.0.0/15
+                          - 198.51.100.0/24
+                          - 203.0.113.0/24
+                          - 224.0.0.0/4
+                          - 240.0.0.0/4
+                  ports:
+                    - protocol: TCP
+                      port: 443
+                {{- else if ne $profile "isolated" }}
+                {{- fail "unsupported DevEnvironment networkProfile" }}
+                {{- end }}
