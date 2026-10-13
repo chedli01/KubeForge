@@ -1,5 +1,5 @@
-# Permissions required by Crossplane to manage
-# native Kubernetes resources for KubeForge environments.
+# Permissions required by Crossplane to provision
+# and manage native Kubernetes resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -8,11 +8,13 @@ metadata:
     rbac.crossplane.io/aggregate-to-crossplane: "true"
 
 rules:
+  # Native Kubernetes resources
   - apiGroups: [""]
     resources:
       - namespaces
       - resourcequotas
       - limitranges
+      - serviceaccounts
     verbs:
       - get
       - list
@@ -21,3 +23,29 @@ rules:
       - update
       - patch
       - delete
+
+  # Manage namespace Roles and RoleBindings
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+
+  # Allow Crossplane to provision and bind the
+  # two predefined KubeForge Roles.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+    resourceNames:
+      - environment-viewer
+      - environment-deployer
+    verbs:
+      - escalate
+      - bind

@@ -1,5 +1,9 @@
 # KubeForge environment provisioning:
-# One DevEnvironment XR -> Namespace + ResourceQuota + LimitRange.
+# One DevEnvironment XR ->
+# Namespace + ResourceQuota + LimitRange
+# + Viewer Role + Deployer Role
+# + Deployer ServiceAccount + RoleBinding.
+
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -114,3 +118,179 @@ spec:
                   {{- else }}
                   {{- fail "unsupported DevEnvironment size" }}
                   {{- end }}
+
+            ---
+            # 4. Viewer Role
+            # Read-only permissions for application workloads.
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: Role
+            metadata:
+              name: environment-viewer
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-viewer-role
+                {{- if hasKey $.observed.resources "environment-viewer-role" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            rules:
+              - apiGroups: [""]
+                resources:
+                  - pods
+                  - services
+                verbs:
+                  - get
+                  - list
+                  - watch
+
+              - apiGroups: [""]
+                resources:
+                  - pods/log
+                verbs:
+                  - get
+
+              - apiGroups: ["apps"]
+                resources:
+                  - deployments
+                  - replicasets
+                  - statefulsets
+                  - daemonsets
+                verbs:
+                  - get
+                  - list
+                  - watch
+
+              - apiGroups: ["batch"]
+                resources:
+                  - jobs
+                  - cronjobs
+                verbs:
+                  - get
+                  - list
+                  - watch
+
+            ---
+            # 5. Deployer Role
+            # Manage application workloads but not RBAC,
+            # ServiceAccounts, ResourceQuotas or LimitRanges.
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: Role
+            metadata:
+              name: environment-deployer
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-deployer-role
+                {{- if hasKey $.observed.resources "environment-deployer-role" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            rules:
+              # Read workloads and services.
+              - apiGroups: [""]
+                resources:
+                  - pods
+                  - services
+                  - configmaps
+                verbs:
+                  - get
+                  - list
+                  - watch
+
+              # Access container logs.
+              - apiGroups: [""]
+                resources:
+                  - pods/log
+                verbs:
+                  - get
+
+              # Create and manage application Pods,
+              # Services and ConfigMaps.
+              - apiGroups: [""]
+                resources:
+                  - pods
+                  - services
+                  - configmaps
+                verbs:
+                  - create
+                  - update
+                  - patch
+                  - delete
+
+              # Read application controllers.
+              - apiGroups: ["apps"]
+                resources:
+                  - deployments
+                  - replicasets
+                  - statefulsets
+                  - daemonsets
+                verbs:
+                  - get
+                  - list
+                  - watch
+
+              # Deploy and manage application controllers.
+              - apiGroups: ["apps"]
+                resources:
+                  - deployments
+                  - statefulsets
+                  - daemonsets
+                verbs:
+                  - create
+                  - update
+                  - patch
+                  - delete
+
+              # Read and manage batch workloads.
+              - apiGroups: ["batch"]
+                resources:
+                  - jobs
+                  - cronjobs
+                verbs:
+                  - get
+                  - list
+                  - watch
+                  - create
+                  - update
+                  - patch
+                  - delete
+
+            ---
+            # 6. ServiceAccount for deployment automation
+            apiVersion: v1
+            kind: ServiceAccount
+            metadata:
+              name: environment-deployer
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-deployer-sa
+                {{- if hasKey $.observed.resources "environment-deployer-sa" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            automountServiceAccountToken: false
+
+            ---
+            # 7. Bind the deployer Role to its ServiceAccount
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: RoleBinding
+            metadata:
+              name: environment-deployer
+              namespace: {{ $name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: environment-deployer-binding
+                {{- if hasKey $.observed.resources "environment-deployer-binding" }}
+                gotemplating.fn.crossplane.io/ready: "True"
+                {{- end }}
+              labels:
+                platform.kubeforge.io/environment: {{ $name }}
+            subjects:
+              - kind: ServiceAccount
+                name: environment-deployer
+                namespace: {{ $name }}
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: Role
+              name: environment-deployer
