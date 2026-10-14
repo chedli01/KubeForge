@@ -1,0 +1,8 @@
+# apiVersion: platform.kubeforge.io/v1alpha1
+# kind: DevEnvironment
+# metadata:
+#   name: ci-valid-standard
+# spec:
+#   team: orders
+#   size: medium
+#   networkProfile: standard
