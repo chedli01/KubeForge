@@ -1,0 +1,6 @@
+apiVersion: platform.kubeforge.io/v1alpha1
+kind: DevEnvironment
+metadata:
+  name: ci-invalid-missing
+spec:
+  team: payments
