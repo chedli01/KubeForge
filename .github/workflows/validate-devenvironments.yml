@@ -1,0 +1,43 @@
+name: Validate DevEnvironment Requests
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-devenvironments-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-devenvironments:
+    name: validate-devenvironments
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out proposed changes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: python -m pip install -r kubeforge-gitops/scripts/requirements-ci.txt
+
+      - name: Test the validation logic
+        run: python -m unittest discover -s kubeforge-gitops/tests -p 'test_*.py' -v
+
+      - name: Validate every GitOps DevEnvironment request
+        run: |
+          python kubeforge-gitops/scripts/validate-environments.py \
+            --xrd kubeforge-platform/manifests/xrds/dev-environment.yaml \
+            --environments kubeforge-gitops/environments
