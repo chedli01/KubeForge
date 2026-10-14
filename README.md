@@ -87,7 +87,7 @@ sequenceDiagram
     G->>CI: Trigger validation
     CI->>CI: Unit tests + YAML + XRD schema + platform rules
     alt Invalid request
-        CI-->>G: Required check fails; merge blocked
+        CI-->>G: Required check fails - merge blocked
     else Valid request
         CI-->>G: Required check passes
         D->>G: Review and merge PR into main
